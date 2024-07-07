@@ -104,5 +104,5 @@ func (app *application) initServices() {
 	db := app.db
 	models := model.NewModels(db)
 
-	app.services = &service.Services{Product: service.NewProductService(db, models)}
+	app.services = service.NewServices(db, models)
 }

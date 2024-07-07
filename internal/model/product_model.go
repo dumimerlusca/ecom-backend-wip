@@ -11,7 +11,7 @@ type ProductRecord struct {
 	Title       string
 	Subtitle    *string
 	Description string
-	Thumbnail   *string
+	ThumbnailId *string
 	Status      string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
@@ -26,9 +26,9 @@ func NewProductModel() *ProductModel {
 }
 
 func (p *ProductModel) Insert(ctx context.Context, conn sqldb.Connection, product *ProductRecord) (*ProductRecord, error) {
-	q := `INSERT INTO product (title, subtitle, description, thumbnail, status) VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at, updated_at`
+	q := `INSERT INTO product (title, subtitle, description, thumbnail_id, status) VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at, updated_at`
 
-	err := conn.QueryRowContext(ctx, q, product.Title, product.Subtitle, product.Description, product.Thumbnail, product.Status).Scan(&product.Id, &product.CreatedAt, &product.UpdatedAt)
+	err := conn.QueryRowContext(ctx, q, product.Title, product.Subtitle, product.Description, product.ThumbnailId, product.Status).Scan(&product.Id, &product.CreatedAt, &product.UpdatedAt)
 
 	if err != nil {
 		return nil, err

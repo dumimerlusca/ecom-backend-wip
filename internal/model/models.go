@@ -9,6 +9,10 @@ type Models struct {
 	ProductOptionValueModel        *ProductOptionValueModel
 	MoneyAmountModel               *MoneyAmountModel
 	ProductVariantMoneyAmountModel *ProductVariantMoneyAmountModel
+	ProductCategoryModel           *ProductCategoryModel
+	ProductCategoryProductModel    *ProductCategoryProductModel
+	FileModel                      *FileModel
+	EntityFileModel                *EntityFileModel
 }
 
 func NewModels(conn sqldb.Connection) *Models {
@@ -19,5 +23,9 @@ func NewModels(conn sqldb.Connection) *Models {
 		ProductOptionValueModel:        NewProductOptionValueModel(),
 		MoneyAmountModel:               NewMoneyAmountModel(),
 		ProductVariantMoneyAmountModel: NewProductVariantMoneyAmountModel(),
+		ProductCategoryModel:           NewProductCategoryModel(),
+		ProductCategoryProductModel:    NewProductCategoryProductModel(),
+		FileModel:                      NewFileModel(),
+		EntityFileModel:                NewEntityFileModel(),
 	}
 }

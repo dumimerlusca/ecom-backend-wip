@@ -35,14 +35,7 @@ func (p *ProductVariantModel) Insert(ctx context.Context, conn sqldb.Connection,
 	err := conn.QueryRowContext(ctx, q, variant.ProductId, variant.Title, variant.Sku, variant.Barcode, variant.Material, variant.Weight, variant.Length, variant.Width, variant.Height, variant.InventoryQuantity).Scan(&variant.Id, &variant.CreatedAt, &variant.UpdatedAt)
 
 	if err != nil {
-		switch {
-
-		case err.Error() == "pq: duplicate key value violates unique constraint \"product_variant_barcode_key\"":
-			return nil, ErrDuplicateBarcode
-		default:
-			return nil, err
-
-		}
+		return nil, err
 	}
 
 	return variant, nil

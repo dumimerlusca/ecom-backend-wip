@@ -1,6 +1,10 @@
 package validator
 
-import "regexp"
+import (
+	"regexp"
+
+	"github.com/google/uuid"
+)
 
 var (
 	// EmailRX is a regex for sanity checking the format of email addresses.
@@ -57,4 +61,9 @@ func Unique(values []string) bool {
 	}
 
 	return len(values) == len(uniqueValues)
+}
+
+func IsValidUUID(u string) bool {
+	_, err := uuid.Parse(u)
+	return err == nil
 }

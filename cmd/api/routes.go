@@ -19,11 +19,17 @@ func (app *application) routes() http.Handler {
 	router.NotFound = http.FileServer(http.Dir("admin"))
 
 	// API ROUTES
-	router.HandlerFunc(http.MethodGet, "/api/v1/products", h.products.GetProducts)
-	router.HandlerFunc(http.MethodPost, "/api/v1/products", h.products.CreateProduct)
-	router.HandlerFunc(http.MethodGet, "/api/v1/products/:productId", h.products.GetProduct)
-	router.HandlerFunc(http.MethodPatch, "/api/v1/products/:productId", h.products.UpdateProduct)
-	router.HandlerFunc(http.MethodDelete, "/api/v1/products/:productId", h.products.DeleteProduct)
+	router.HandlerFunc(http.MethodGet, "/api/v1/products", h.product.GetProducts)
+	router.HandlerFunc(http.MethodPost, "/api/v1/products", h.product.CreateProduct)
+	router.HandlerFunc(http.MethodGet, "/api/v1/products/:productId", h.product.GetProduct)
+	router.HandlerFunc(http.MethodPatch, "/api/v1/products/:productId", h.product.UpdateProduct)
+	router.HandlerFunc(http.MethodDelete, "/api/v1/products/:productId", h.product.DeleteProduct)
+
+	router.HandlerFunc(http.MethodPost, "/api/v1/product-categories", h.productCategories.Create)
+
+	// File upload
+	router.HandlerFunc(http.MethodPost, "/api/v1/upload", h.fileUpload.UploadFile)
+	router.GET("/api/v1/files/:fileId", h.fileUpload.ServerFile)
 
 	m := app.middleware
 
