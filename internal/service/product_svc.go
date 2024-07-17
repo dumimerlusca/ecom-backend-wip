@@ -3,9 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
-	"ecom-backend/internal/consts"
 	"ecom-backend/internal/model"
-	"ecom-backend/internal/validator"
 	"errors"
 	"fmt"
 )
@@ -19,76 +17,7 @@ func NewProductService(db *sql.DB, models *model.Models) *ProductService {
 	return &ProductService{db: db, models: models}
 }
 
-type CreateProductInput struct {
-	Title       string  `json:"title"`
-	Subtitle    *string `json:"subtitle"`
-	Description string  `json:"description"`
-	ThumbnailId *string `json:"thumbnail_id"`
-	Material    *string `json:"material"`
-	Images      []struct {
-		Id string `json:"id"`
-	} `json:"images"`
-	Brand      *string `json:"brand"`
-	Status     string  `json:"status"`
-	Categories []struct {
-		Id string `json:"id"`
-	} `json:"categories"`
-	Options []struct {
-		Title string `json:"title"`
-	} `json:"options"`
-	Variants []VariantInput `json:"variants"`
-}
-
-type VariantInput struct {
-	Title             string `json:"title"`
-	Sku               string `json:"sku"`
-	Barcode           int    `json:"barcode"`
-	InventoryQuantity int    `json:"inventory_quantity"`
-	Options           []struct {
-		Value string `json:"value"`
-	} `json:"options"`
-	Prices []struct {
-		Code   string  `json:"code"`
-		Amount float32 `json:"amount"`
-	} `json:"prices"`
-}
-
-func (input *CreateProductInput) Validate(v *validator.Validator) {
-	v.Check(input.Title != "", "title", "must be provided")
-	v.Check(input.Description != "", "description", "must be provided")
-	v.Check(validator.In(input.Status, consts.StatusDraft, consts.StatusPublished), "status", "invalid status")
-	v.Check(len(input.Variants) > 0, "variants", "at least one variant must be provided")
-
-	if len(input.Variants) > 0 {
-		for _, variant := range input.Variants {
-			variant.Validate(v)
-		}
-	}
-
-}
-
-func (input *VariantInput) Validate(v *validator.Validator) {
-	v.Check(input.Title != "", "variant.title", "must be provided")
-	v.Check(input.InventoryQuantity >= 0, "variant.inventory_quantity", "should not be negative")
-	v.Check(len(input.Prices) != 0, "variant.prices", "at least one price must be provided")
-
-	if len(input.Prices) > 0 {
-		for _, price := range input.Prices {
-			v.Check(price.Code != "", "variant.price_code", "must be provided")
-			v.Check(price.Amount > 0, "variant.price_amount", "must be greater than zero")
-		}
-	}
-
-	if len(input.Options) > 0 {
-		for _, option := range input.Options {
-			v.Check(option.Value != "", "variant.option_value", "must be provided")
-		}
-
-	}
-
-}
-
-func (s *ProductService) CreateProduct(ctx context.Context, input *CreateProductInput) (*DetailedProduct, error) {
+func (svc *ProductService) CreateProduct(ctx context.Context, input *CreateProductInput) (*DetailedProduct, error) {
 
 	productCategoryRecords := []*model.ProductCategoryRecord{}
 	productOptionRecords := []*model.ProductOptionRecord{}
@@ -96,7 +25,7 @@ func (s *ProductService) CreateProduct(ctx context.Context, input *CreateProduct
 	moneyAmountRecords := map[string][]*model.MoneyAmountRecord{}
 	variantOptionValueRecords := map[string][]*model.ProductOptionValueRecord{}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := svc.db.BeginTx(ctx, nil)
 
 	if err != nil {
 		return nil, err
@@ -109,7 +38,7 @@ func (s *ProductService) CreateProduct(ctx context.Context, input *CreateProduct
 	// the actual product entity containing the price that is used for purchase, wishlist, cart is the product_variant
 	productRecord := &model.ProductRecord{Title: input.Title, Subtitle: input.Subtitle, Description: input.Description, ThumbnailId: input.ThumbnailId, Status: input.Status}
 
-	product, err := s.models.ProductModel.Insert(ctx, tx, productRecord)
+	product, err := svc.models.ProductModel.Insert(ctx, tx, productRecord)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create product record: %w", err)
@@ -118,7 +47,7 @@ func (s *ProductService) CreateProduct(ctx context.Context, input *CreateProduct
 	// create product_category_product records
 	// the product_category_product table is used to link the product to multiple categories
 	for _, category := range input.Categories {
-		categoryRecord, err := s.models.ProductCategoryModel.FindById(ctx, tx, category.Id)
+		categoryRecord, err := svc.models.ProductCategoryModel.FindById(ctx, tx, category.Id)
 
 		if err != nil {
 			if errors.Is(err, model.ErrRecordNotFound) {
@@ -130,7 +59,7 @@ func (s *ProductService) CreateProduct(ctx context.Context, input *CreateProduct
 
 		productCategoryRecords = append(productCategoryRecords, categoryRecord)
 
-		_, err = s.models.ProductCategoryProductModel.Insert(ctx, tx, &model.ProductCategoryProductRecord{ProductId: product.Id, CategoryId: category.Id})
+		_, err = svc.models.ProductCategoryProductModel.Insert(ctx, tx, &model.ProductCategoryProductRecord{ProductId: product.Id, CategoryId: category.Id})
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to create product_category_product record: %w", err)
@@ -141,7 +70,7 @@ func (s *ProductService) CreateProduct(ctx context.Context, input *CreateProduct
 	// create product_option records
 	// ex: size, color, etc
 	for _, option := range input.Options {
-		optionRecord, err := s.models.ProductOptionModel.Insert(ctx, tx, &model.ProductOptionRecord{ProductId: product.Id, Title: option.Title})
+		optionRecord, err := svc.models.ProductOptionModel.Insert(ctx, tx, &model.ProductOptionRecord{ProductId: product.Id, Title: option.Title})
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to create product_option record: %w", err)
@@ -155,7 +84,7 @@ func (s *ProductService) CreateProduct(ctx context.Context, input *CreateProduct
 	for _, variant := range input.Variants {
 		productVariantRecord := &model.ProductVariantRecord{ProductId: product.Id, Title: variant.Title, Sku: &variant.Sku, Barcode: &variant.Barcode, InventoryQuantity: variant.InventoryQuantity}
 
-		variantRecord, err := s.models.ProductVariantModel.Insert(ctx, tx, productVariantRecord)
+		variantRecord, err := svc.models.ProductVariantModel.Insert(ctx, tx, productVariantRecord)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create product_variant record: %w", err)
 		}
@@ -166,7 +95,7 @@ func (s *ProductService) CreateProduct(ctx context.Context, input *CreateProduct
 			// creating product_option_value value record
 			// each variant is linked to multiple product options
 			// ex: variant 1 is linked to size: M, color: red
-			productOptionValueRecord, err := s.models.ProductOptionValueModel.Insert(ctx, tx, &model.ProductOptionValueRecord{VariantId: variantRecord.Id, Title: option.Value, OptionId: productOptionRecords[i].Id})
+			productOptionValueRecord, err := svc.models.ProductOptionValueModel.Insert(ctx, tx, &model.ProductOptionValueRecord{VariantId: variantRecord.Id, Title: option.Value, OptionId: productOptionRecords[i].Id})
 
 			if err != nil {
 				return nil, fmt.Errorf("failed to create product_option_value record: %w", err)
@@ -178,7 +107,7 @@ func (s *ProductService) CreateProduct(ctx context.Context, input *CreateProduct
 		for _, price := range variant.Prices {
 			// create money_amount record
 			// the price is stored in the money_amount table and will be linked to the variant using the product_variant_money_amount table
-			moneyAmountRecord, err := s.models.MoneyAmountModel.Insert(ctx, tx, &model.MoneyAmountRecord{CurrencyCode: price.Code, Amount: price.Amount})
+			moneyAmountRecord, err := svc.models.MoneyAmountModel.Insert(ctx, tx, &model.MoneyAmountRecord{CurrencyCode: price.Code, Amount: price.Amount})
 
 			if err != nil {
 				return nil, fmt.Errorf("failed to create money_amount record: %w", err)
@@ -187,7 +116,7 @@ func (s *ProductService) CreateProduct(ctx context.Context, input *CreateProduct
 			// create product_variant_money_amount record
 			// the product_variant_money_amount table is used to link the product_variant to the money_amount
 			// 1 -> M relationship, in order to support multiple currencies
-			_, err = s.models.ProductVariantMoneyAmountModel.Insert(ctx, tx, &model.ProductVariantMoneyAmountRecord{VariantId: variantRecord.Id, MoneyAmountId: moneyAmountRecord.Id})
+			_, err = svc.models.ProductVariantMoneyAmountModel.Insert(ctx, tx, &model.ProductVariantMoneyAmountRecord{VariantId: variantRecord.Id, MoneyAmountId: moneyAmountRecord.Id})
 
 			if err != nil {
 				return nil, fmt.Errorf("failed to create product_variant_money_amount record: %w", err)
@@ -200,7 +129,7 @@ func (s *ProductService) CreateProduct(ctx context.Context, input *CreateProduct
 
 	// link product to images
 	for _, image := range input.Images {
-		_, err := s.models.EntityFileModel.Insert(ctx, tx, &model.EntityFileRecord{EntityId: product.Id, FileId: image.Id})
+		_, err := svc.models.EntityFileModel.Insert(ctx, tx, &model.EntityFileRecord{EntityId: product.Id, FileId: image.Id})
 
 		if err != nil {
 			return nil, fmt.Errorf("failed to link image to product: %w", err)
@@ -215,4 +144,113 @@ func (s *ProductService) CreateProduct(ctx context.Context, input *CreateProduct
 	finalProduct := BuildDetailedProduct(product, productCategoryRecords, productOptionRecords, variantRecords, moneyAmountRecords, variantOptionValueRecords)
 
 	return finalProduct, nil
+}
+
+func (svc *ProductService) UpdateProduct(ctx context.Context, productId string, input *UpdateProductInput) (*model.ProductRecord, error) {
+	tx, err := svc.db.BeginTx(ctx, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	productRecord, err := svc.models.ProductModel.FindById(ctx, tx, productId)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if input.Title != nil {
+		productRecord.Title = *input.Title
+	}
+
+	if input.Subtitle != nil {
+		productRecord.Subtitle = input.Subtitle
+	}
+
+	if input.Description != nil {
+		productRecord.Description = *input.Description
+	}
+
+	if input.Status != nil {
+		productRecord.Status = *input.Status
+	}
+
+	if input.ThumbnailId != nil {
+		productRecord.ThumbnailId = input.ThumbnailId
+	}
+
+	productRecord, err = svc.models.ProductModel.Update(ctx, tx, productRecord)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if input.Categories != nil {
+		// handle categories
+
+		// delete all existing product_category_product records
+		// and create new ones
+		err := svc.models.ProductCategoryProductModel.DeleteAllByProductId(ctx, tx, productId)
+
+		if err != nil {
+			return nil, err
+
+		}
+
+		for _, category := range *input.Categories {
+			_, err := svc.models.ProductCategoryProductModel.Insert(ctx, tx, &model.ProductCategoryProductRecord{ProductId: productId, CategoryId: category.Id})
+
+			if err != nil {
+				return nil, fmt.Errorf("failed to create product_category_product record: %w", err)
+			}
+		}
+	}
+
+	if input.Options != nil {
+		// handle product options
+
+		// delete all existing product_option records
+		// and create new ones
+		err := svc.models.ProductOptionModel.DeleteAllByProductId(ctx, tx, productId)
+
+		if err != nil {
+			return nil, err
+		}
+
+		for _, option := range *input.Options {
+			_, err := svc.models.ProductOptionModel.Insert(ctx, tx, &model.ProductOptionRecord{ProductId: productId, Title: option.Title})
+
+			if err != nil {
+				return nil, fmt.Errorf("failed to create product_option record: %w", err)
+			}
+
+		}
+
+	}
+
+	if input.Images != nil {
+		// handle images
+
+		// delete all existing entity_file records
+		// and create new ones
+		err := svc.models.EntityFileModel.DeleteAllByEntityId(ctx, tx, productId)
+
+		if err != nil {
+			return nil, err
+		}
+
+		for _, image := range *input.Images {
+			_, err := svc.models.EntityFileModel.Insert(ctx, tx, &model.EntityFileRecord{EntityId: productId, FileId: image.Id})
+
+			if err != nil {
+				return nil, fmt.Errorf("failed to link image to product: %w", err)
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return productRecord, nil
 }

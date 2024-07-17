@@ -37,3 +37,14 @@ func (m *ProductCategoryProductModel) Insert(ctx context.Context, conn sqldb.Con
 	}
 	return record, nil
 }
+
+func (m *ProductCategoryProductModel) DeleteAllByProductId(ctx context.Context, conn sqldb.Connection, productId string) error {
+	q := `DELETE FROM product_category_product WHERE product_id = $1`
+	_, err := conn.ExecContext(ctx, q, productId)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

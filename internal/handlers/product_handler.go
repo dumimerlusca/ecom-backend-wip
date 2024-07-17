@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/julienschmidt/httprouter"
 )
 
 type ProductHandler struct {
@@ -60,14 +62,56 @@ func (h *ProductHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *ProductHandler) UpdateProduct(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	productId := ps.ByName("productId")
+
+	if productId == "" {
+		h.BadRequestResponse(w, r, errors.New("missing product id"))
+		return
+	}
+
+	var input service.UpdateProductInput
+
+	err := h.ReadJSON(w, r, &input)
+
+	if err != nil {
+		h.BadRequestResponse(w, r, err)
+		return
+
+	}
+
+	v := validator.New()
+
+	input.Validate(v)
+
+	if !v.Valid() {
+		h.FailedValidationResponse(w, r, v.Errors)
+		return
+
+	}
+
+	product, err := h.productSvc.UpdateProduct(r.Context(), productId, &input)
+
+	if err != nil {
+		switch {
+		case errors.Is(err, model.ErrRecordNotFound):
+			h.NotFoundResponse(w, r)
+		default:
+			h.ServerErrorResponse(w, r, err)
+		}
+		return
+
+	}
+
+	// TODO: change response to include detailed product
+	h.WriteJson(w, http.StatusOK, ResponseBody{Payload: Envelope{"product_info": product}}, nil)
+}
+
 func (h *ProductHandler) GetProducts(w http.ResponseWriter, r *http.Request) {
 	h.WriteJson(w, 200, "Get products", nil)
 }
 func (h *ProductHandler) GetProduct(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("GetProduct")
-}
-func (h *ProductHandler) UpdateProduct(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("UpdateProduct")
 }
 func (h *ProductHandler) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("DeleteProduct")

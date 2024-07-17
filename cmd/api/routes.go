@@ -21,8 +21,8 @@ func (app *application) routes() http.Handler {
 	// API ROUTES
 	router.HandlerFunc(http.MethodGet, "/api/v1/products", h.product.GetProducts)
 	router.HandlerFunc(http.MethodPost, "/api/v1/products", h.product.CreateProduct)
+	router.PATCH("/api/v1/products/:productId", h.product.UpdateProduct)
 	router.HandlerFunc(http.MethodGet, "/api/v1/products/:productId", h.product.GetProduct)
-	router.HandlerFunc(http.MethodPatch, "/api/v1/products/:productId", h.product.UpdateProduct)
 	router.HandlerFunc(http.MethodDelete, "/api/v1/products/:productId", h.product.DeleteProduct)
 
 	router.HandlerFunc(http.MethodPost, "/api/v1/product-categories", h.productCategories.Create)

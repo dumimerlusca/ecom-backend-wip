@@ -40,3 +40,14 @@ func (e *EntityFileModel) Insert(ctx context.Context, conn sqldb.Connection, ent
 
 	return entityFile, nil
 }
+
+func (e *EntityFileModel) DeleteAllByEntityId(ctx context.Context, conn sqldb.Connection, entityId string) error {
+	q := `DELETE FROM entity_file WHERE entity_id = $1`
+	_, err := conn.ExecContext(ctx, q, entityId)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

@@ -1,7 +1,9 @@
 package service
 
 import (
+	"ecom-backend/internal/consts"
 	"ecom-backend/internal/model"
+	"ecom-backend/internal/validator"
 	"time"
 )
 
@@ -144,4 +146,107 @@ func BuildDetailedProduct(
 	}
 
 	return &dp
+}
+
+type CreateProductInput struct {
+	Title       string              `json:"title"`
+	Subtitle    *string             `json:"subtitle"`
+	Description string              `json:"description"`
+	ThumbnailId *string             `json:"thumbnail_id"`
+	Material    *string             `json:"material"`
+	Images      []ProductImageInput `json:"images"`
+	Brand       *string             `json:"brand"`
+	Status      string              `json:"status"`
+	Categories  []struct {
+		Id string `json:"id"`
+	} `json:"categories"`
+	Options  []ProductOptionInput `json:"options"`
+	Variants []VariantInput       `json:"variants"`
+}
+
+func (input *CreateProductInput) Validate(v *validator.Validator) {
+	v.Check(input.Title != "", "title", "must be provided")
+	v.Check(input.Description != "", "description", "must be provided")
+	v.Check(validator.In(input.Status, consts.StatusDraft, consts.StatusPublished), "status", "invalid status")
+	v.Check(len(input.Variants) > 0, "variants", "at least one variant must be provided")
+
+	if len(input.Variants) > 0 {
+		for _, variant := range input.Variants {
+			variant.Validate(v)
+		}
+	}
+
+}
+
+type VariantInput struct {
+	Title             string `json:"title"`
+	Sku               string `json:"sku"`
+	Barcode           int    `json:"barcode"`
+	InventoryQuantity int    `json:"inventory_quantity"`
+	Options           []struct {
+		Value string `json:"value"`
+	} `json:"options"`
+	Prices []struct {
+		Code   string  `json:"code"`
+		Amount float32 `json:"amount"`
+	} `json:"prices"`
+}
+
+func (input *VariantInput) Validate(v *validator.Validator) {
+	v.Check(input.Title != "", "variant.title", "must be provided")
+	v.Check(input.InventoryQuantity >= 0, "variant.inventory_quantity", "should not be negative")
+	v.Check(len(input.Prices) != 0, "variant.prices", "at least one price must be provided")
+
+	if len(input.Prices) > 0 {
+		for _, price := range input.Prices {
+			v.Check(price.Code != "", "variant.price_code", "must be provided")
+			v.Check(price.Amount > 0, "variant.price_amount", "must be greater than zero")
+		}
+	}
+
+	if len(input.Options) > 0 {
+		for _, option := range input.Options {
+			v.Check(option.Value != "", "variant.option_value", "must be provided")
+		}
+
+	}
+
+}
+
+type ProductImageInput struct {
+	Id string `json:"id"`
+}
+
+type ProductCategoryInput struct {
+	Id string `json:"id"`
+}
+type ProductOptionInput struct {
+	Title string `json:"title"`
+}
+
+type UpdateProductInput struct {
+	Title       *string                 `json:"title"`
+	Subtitle    *string                 `json:"subtitle"`
+	Description *string                 `json:"description"`
+	ThumbnailId *string                 `json:"thumbnail_id"`
+	Material    *string                 `json:"material"`
+	Images      *[]ProductImageInput    `json:"images"`
+	Brand       *string                 `json:"brand"`
+	Status      *string                 `json:"status"`
+	Categories  *[]ProductCategoryInput `json:"categories"`
+	Options     *[]ProductOptionInput   `json:"options"`
+}
+
+func (input *UpdateProductInput) Validate(v *validator.Validator) {
+	if input.Title != nil {
+		v.Check(*input.Title != "", "title", "must not be empty")
+	}
+
+	if input.Description != nil {
+		v.Check(*input.Description != "", "description", "must not be empty")
+	}
+
+	if input.Status != nil {
+		v.Check(validator.In(*input.Status, consts.StatusDraft, consts.StatusPublished), "status", "invalid status")
+	}
 }
