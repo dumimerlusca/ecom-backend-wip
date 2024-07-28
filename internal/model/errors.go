@@ -10,4 +10,5 @@ var (
 	ErrDuplicatedProductCategoryForProduct = errors.New("duplicated product category for same product")
 	ErrParentProductCategoryNotFound       = errors.New("parent product category not found")
 	ErrFileNotFound                        = errors.New("file not found")
+	ErrDuplicatedEmail                     = errors.New("duplicated email")
 )

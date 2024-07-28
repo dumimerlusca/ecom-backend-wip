@@ -48,3 +48,29 @@ func (p *ProductOptionModel) DeleteAllByProductId(ctx context.Context, conn sqld
 
 	return nil
 }
+
+func (p *ProductOptionModel) FindAllByProductId(ctx context.Context, conn sqldb.Connection, productId string) ([]*ProductOptionRecord, error) {
+	q := `SELECT id, product_id, title, created_at, updated_at, deleted_at FROM product_option WHERE product_id = $1`
+
+	rows, err := conn.QueryContext(ctx, q, productId)
+
+	if err != nil {
+		return nil, err
+	}
+
+	list := []*ProductOptionRecord{}
+
+	for rows.Next() {
+		var record ProductOptionRecord
+
+		err := rows.Scan(&record.Id, &record.ProductId, &record.Title, &record.CreatedAt, &record.UpdatedAt, &record.DeletedAt)
+
+		if err != nil {
+			return nil, err
+		}
+
+		list = append(list, &record)
+	}
+
+	return list, nil
+}

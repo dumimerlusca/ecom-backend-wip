@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS citext;
+
 CREATE TYPE product_status AS ENUM ('draft', 'published', 'deleted');
 
 CREATE TABLE IF NOT EXISTS product (
@@ -93,7 +95,8 @@ CREATE TABLE IF NOT EXISTS product_category (
     name text NOT NULL,
     parent_id uuid,
     created_at timestamp NOT NULL DEFAULT now(),
-    updated_at timestamp NOT NULL DEFAULT now()
+    updated_at timestamp NOT NULL DEFAULT now(),
+    deleted_at timestamp
 );
 
 CREATE TABLE IF NOT EXISTS product_category_product (
@@ -121,4 +124,24 @@ CREATE TABLE IF NOT EXISTS entity_file (
     updated_at timestamp NOT NULL DEFAULT now(),
     PRIMARY KEY (file_id, entity_id),
     FOREIGN KEY (file_id) REFERENCES file(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS users (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    email citext UNIQUE NOT NULL,
+    password_hash bytea NOT NULL,
+    created_at timestamp NOT NULL DEFAULT now(),
+    updated_at timestamp NOT NULL DEFAULT now(),
+    is_admin bool NOT NULL DEFAULT false,
+    activated bool NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+CREATE TABLE IF NOT EXISTS token (
+    hash bytea PRIMARY KEY NOT NULL,
+    user_id uuid NOT NULL REFERENCES users ON DELETE CASCADE,
+    expiry timestamp with time zone NOT NULL,
+    scope text NOT NULL
 );

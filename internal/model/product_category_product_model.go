@@ -48,3 +48,29 @@ func (m *ProductCategoryProductModel) DeleteAllByProductId(ctx context.Context, 
 
 	return nil
 }
+
+func (m *ProductCategoryProductModel) FindCategoriesForProduct(ctx context.Context, conn sqldb.Connection, productId string) ([]*ProductCategoryRecord, error) {
+	q := `SELECT pc.id, pc.name, pc.parent_id, pc.created_at, pc.updated_at FROM product_category_product as pcp INNER JOIN product_category as pc ON pcp.category_id = pc.id WHERE product_id = $1`
+
+	rows, err := conn.QueryContext(ctx, q, productId)
+
+	if err != nil {
+		return nil, err
+	}
+
+	list := []*ProductCategoryRecord{}
+
+	for rows.Next() {
+		var category ProductCategoryRecord
+
+		err := rows.Scan(&category.Id, &category.Name, &category.ParentId, &category.CreatedAt, &category.UpdatedAt)
+
+		if err != nil {
+			return nil, err
+		}
+
+		list = append(list, &category)
+	}
+
+	return list, nil
+}

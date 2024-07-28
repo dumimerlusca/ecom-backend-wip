@@ -51,3 +51,30 @@ func (e *EntityFileModel) DeleteAllByEntityId(ctx context.Context, conn sqldb.Co
 
 	return nil
 }
+
+func (e *EntityFileModel) FindAllFilesByEntityId(ctx context.Context, conn sqldb.Connection, entityId string) ([]string, error) {
+	q := `SELECT file_id FROM entity_file
+		  WHERE entity_id = $1`
+
+	rows, err := conn.QueryContext(ctx, q, entityId)
+
+	if err != nil {
+		return nil, err
+	}
+
+	fileIds := []string{}
+
+	for rows.Next() {
+		var fileId string
+
+		err := rows.Scan(&fileId)
+
+		if err != nil {
+			return nil, err
+		}
+
+		fileIds = append(fileIds, fileId)
+	}
+
+	return fileIds, nil
+}

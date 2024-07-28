@@ -32,3 +32,15 @@ func (m *MoneyAmountModel) Insert(ctx context.Context, conn sqldb.Connection, mo
 
 	return moneyAmount, nil
 }
+
+func (m *MoneyAmountModel) DeleteById(ctx context.Context, conn sqldb.Connection, id string) error {
+	q := `DELETE FROM money_amount WHERE id = $1`
+
+	_, err := conn.ExecContext(ctx, q, id)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

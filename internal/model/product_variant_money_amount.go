@@ -31,3 +31,14 @@ func (m *ProductVariantMoneyAmountModel) Insert(ctx context.Context, conn sqldb.
 
 	return value, nil
 }
+
+func (m *ProductVariantMoneyAmountModel) DeleteAllByVariantId(ctx context.Context, conn sqldb.Connection, variantId string) error {
+	q := `DELETE FROM product_variant_money_amount WHERE variant_id = $1`
+
+	_, err := conn.ExecContext(ctx, q, variantId)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

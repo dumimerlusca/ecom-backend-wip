@@ -29,5 +29,13 @@ DROP TABLE IF EXISTS product_variant;
 -- Drop the product table
 DROP TABLE IF EXISTS product;
 
+-- Drop the token table
+DROP TABLE IF EXISTS token;
+
+-- Drop the user table
+DROP TABLE IF EXISTS users;
+
 -- Drop the product_status enum type
 DROP TYPE IF EXISTS product_status;
+
+DROP EXTENSION IF EXISTS citext;

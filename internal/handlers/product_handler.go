@@ -6,7 +6,6 @@ import (
 	"ecom-backend/internal/service"
 	"ecom-backend/internal/validator"
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/julienschmidt/httprouter"
@@ -62,7 +61,7 @@ func (h *ProductHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *ProductHandler) UpdateProduct(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+func (h *ProductHandler) UpdateProductGeneralInfo(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	productId := ps.ByName("productId")
 
 	if productId == "" {
@@ -90,7 +89,7 @@ func (h *ProductHandler) UpdateProduct(w http.ResponseWriter, r *http.Request, p
 
 	}
 
-	product, err := h.productSvc.UpdateProduct(r.Context(), productId, &input)
+	product, err := h.productSvc.UpdateProductDetails(r.Context(), productId, &input)
 
 	if err != nil {
 		switch {
@@ -107,12 +106,85 @@ func (h *ProductHandler) UpdateProduct(w http.ResponseWriter, r *http.Request, p
 	h.WriteJson(w, http.StatusOK, ResponseBody{Payload: Envelope{"product_info": product}}, nil)
 }
 
+func (h *ProductHandler) UpdateVariantDetails(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	variantId := ps.ByName("variantId")
+
+	if variantId == "" {
+		h.BadRequestResponse(w, r, errors.New("missing variant id"))
+		return
+	}
+
+	var input service.UpdateVariantInput
+
+	err := h.ReadJSON(w, r, &input)
+
+	if err != nil {
+		h.BadRequestResponse(w, r, err)
+		return
+	}
+
+	v := validator.New()
+
+	input.Validate(v)
+
+	if !v.Valid() {
+		h.FailedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	_, err = h.productSvc.UpdateVariantDetails(r.Context(), variantId, &input)
+
+	if err != nil {
+		if errors.Is(err, model.ErrRecordNotFound) {
+			h.NotFoundResponse(w, r)
+		} else {
+			h.ServerErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	h.WriteJson(w, http.StatusOK, Envelope{"success": true}, nil)
+}
+
 func (h *ProductHandler) GetProducts(w http.ResponseWriter, r *http.Request) {
 	h.WriteJson(w, 200, "Get products", nil)
 }
-func (h *ProductHandler) GetProduct(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("GetProduct")
+func (h *ProductHandler) GetProduct(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	productId := ps.ByName("productId")
+
+	if productId == "" {
+		h.NotFoundResponse(w, r)
+		return
+	}
+
+	product, err := h.productSvc.FindById(r.Context(), productId)
+
+	if err != nil {
+		h.ServerErrorResponse(w, r, err)
+		return
+	}
+
+	h.WriteJson(w, http.StatusOK, ResponseBody{Payload: Envelope{"product": product}}, nil)
 }
-func (h *ProductHandler) DeleteProduct(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("DeleteProduct")
+func (h *ProductHandler) DeleteProduct(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	productId := ps.ByName("productId")
+
+	if productId == "" {
+		h.NotFoundResponse(w, r)
+		return
+	}
+
+	err := h.productSvc.MarkProductAsDeleted(r.Context(), productId)
+
+	if err != nil {
+		if errors.Is(err, model.ErrRecordNotFound) {
+			h.NotFoundResponse(w, r)
+		} else {
+			h.ServerErrorResponse(w, r, err)
+		}
+
+		return
+	}
+
+	h.WriteJson(w, http.StatusOK, Envelope{"success": true}, nil)
 }

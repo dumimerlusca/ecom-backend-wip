@@ -67,6 +67,7 @@ type VariantOptionValue struct {
 
 func BuildDetailedProduct(
 	productRecord *model.ProductRecord,
+	productImages []string,
 	categoryRecords []*model.ProductCategoryRecord,
 	optionRecords []*model.ProductOptionRecord,
 	variantRecords []*model.ProductVariantRecord,
@@ -87,6 +88,10 @@ func BuildDetailedProduct(
 	if productRecord.ThumbnailId != nil {
 		dp.Thumbnail = &ProductImage{Id: *productRecord.ThumbnailId}
 
+	}
+
+	for _, imageId := range productImages {
+		dp.Images = append(dp.Images, ProductImage{Id: imageId})
 	}
 
 	dp.Categories = []ProductCategoryInfo{}
@@ -160,8 +165,8 @@ type CreateProductInput struct {
 	Categories  []struct {
 		Id string `json:"id"`
 	} `json:"categories"`
-	Options  []ProductOptionInput `json:"options"`
-	Variants []VariantInput       `json:"variants"`
+	Options  []ProductOptionInput        `json:"options"`
+	Variants []CreateProductVariantInput `json:"variants"`
 }
 
 func (input *CreateProductInput) Validate(v *validator.Validator) {
@@ -178,7 +183,7 @@ func (input *CreateProductInput) Validate(v *validator.Validator) {
 
 }
 
-type VariantInput struct {
+type CreateProductVariantInput struct {
 	Title             string `json:"title"`
 	Sku               string `json:"sku"`
 	Barcode           int    `json:"barcode"`
@@ -186,13 +191,15 @@ type VariantInput struct {
 	Options           []struct {
 		Value string `json:"value"`
 	} `json:"options"`
-	Prices []struct {
-		Code   string  `json:"code"`
-		Amount float32 `json:"amount"`
-	} `json:"prices"`
+	Prices []PriceInput `json:"prices"`
 }
 
-func (input *VariantInput) Validate(v *validator.Validator) {
+type PriceInput struct {
+	Code   string  `json:"code"`
+	Amount float32 `json:"amount"`
+}
+
+func (input *CreateProductVariantInput) Validate(v *validator.Validator) {
 	v.Check(input.Title != "", "variant.title", "must be provided")
 	v.Check(input.InventoryQuantity >= 0, "variant.inventory_quantity", "should not be negative")
 	v.Check(len(input.Prices) != 0, "variant.prices", "at least one price must be provided")
@@ -249,4 +256,41 @@ func (input *UpdateProductInput) Validate(v *validator.Validator) {
 	if input.Status != nil {
 		v.Check(validator.In(*input.Status, consts.StatusDraft, consts.StatusPublished), "status", "invalid status")
 	}
+}
+
+type UpdateVariantInput struct {
+	Title             *string `json:"title"`
+	Sku               *string `json:"sku"`
+	Barcode           *int    `json:"barcode"`
+	InventoryQuantity *int    `json:"inventory_quantity"`
+	Options           *[]struct {
+		Value string `json:"value"`
+		Id    string `json:"id"`
+	} `json:"options"`
+	Prices *[]PriceInput `json:"prices"`
+}
+
+func (input *UpdateVariantInput) Validate(v *validator.Validator) {
+	if input.Title != nil {
+		v.Check(*input.Title != "", "title", "must not be empty")
+	}
+
+	if input.InventoryQuantity != nil {
+		v.Check(*input.InventoryQuantity >= 0, "inventory_quantity", "should not be negative")
+	}
+
+	if input.Prices != nil {
+		for _, price := range *input.Prices {
+			v.Check(price.Code != "", "price.code", "must not be empty")
+			v.Check(price.Amount > 0, "price.amount", "must be greater than zero")
+		}
+	}
+
+	if input.Options != nil {
+		for _, option := range *input.Options {
+			v.Check(option.Value != "", "option.value", "must not be empty")
+			v.Check(option.Id != "", "option.id", "must not be empty")
+		}
+	}
+
 }

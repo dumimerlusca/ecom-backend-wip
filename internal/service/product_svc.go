@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"ecom-backend/internal/model"
+	"ecom-backend/pkg/sqldb"
 	"errors"
 	"fmt"
 )
@@ -127,8 +128,12 @@ func (svc *ProductService) CreateProduct(ctx context.Context, input *CreateProdu
 
 	}
 
+	imageIds := []string{}
+
 	// link product to images
 	for _, image := range input.Images {
+		imageIds = append(imageIds, image.Id)
+
 		_, err := svc.models.EntityFileModel.Insert(ctx, tx, &model.EntityFileRecord{EntityId: product.Id, FileId: image.Id})
 
 		if err != nil {
@@ -141,12 +146,12 @@ func (svc *ProductService) CreateProduct(ctx context.Context, input *CreateProdu
 	}
 
 	// populate the final product
-	finalProduct := BuildDetailedProduct(product, productCategoryRecords, productOptionRecords, variantRecords, moneyAmountRecords, variantOptionValueRecords)
+	finalProduct := BuildDetailedProduct(product, imageIds, productCategoryRecords, productOptionRecords, variantRecords, moneyAmountRecords, variantOptionValueRecords)
 
 	return finalProduct, nil
 }
 
-func (svc *ProductService) UpdateProduct(ctx context.Context, productId string, input *UpdateProductInput) (*model.ProductRecord, error) {
+func (svc *ProductService) UpdateProductDetails(ctx context.Context, productId string, input *UpdateProductInput) (*model.ProductRecord, error) {
 	tx, err := svc.db.BeginTx(ctx, nil)
 
 	if err != nil {
@@ -253,4 +258,231 @@ func (svc *ProductService) UpdateProduct(ctx context.Context, productId string, 
 	}
 
 	return productRecord, nil
+}
+
+func (svc *ProductService) UpdateVariantDetails(ctx context.Context, variantId string, input *UpdateVariantInput) (any, error) {
+	tx, err := svc.db.BeginTx(ctx, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer tx.Rollback()
+
+	variantRecord, err := svc.models.ProductVariantModel.FindById(ctx, tx, variantId)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if input.Title != nil {
+		variantRecord.Title = *input.Title
+	}
+
+	if input.Sku != nil {
+		variantRecord.Sku = input.Sku
+	}
+
+	if input.Barcode != nil {
+		variantRecord.Barcode = input.Barcode
+	}
+
+	if input.InventoryQuantity != nil {
+		variantRecord.InventoryQuantity = *input.InventoryQuantity
+	}
+
+	variantRecord, err = svc.models.ProductVariantModel.Update(ctx, tx, variantRecord)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if input.Options != nil {
+		// handle variant option values
+
+		// delete existing product_option_value records
+		// and create new ones
+		err := svc.models.ProductOptionValueModel.DeleteAllByVariantId(ctx, tx, variantId)
+
+		if err != nil {
+			return nil, err
+		}
+
+		for _, option := range *input.Options {
+			_, err := svc.models.ProductOptionValueModel.Insert(ctx, tx, &model.ProductOptionValueRecord{VariantId: variantId, Title: option.Value, OptionId: option.Id})
+
+			if err != nil {
+				return nil, fmt.Errorf("failed to create product_option_value record: %w", err)
+			}
+		}
+	}
+
+	if input.Prices != nil {
+		// handle prices
+
+		// delete existing product_variant_money_amount records
+		err := svc.models.ProductVariantMoneyAmountModel.DeleteAllByVariantId(ctx, tx, variantId)
+
+		if err != nil {
+			return nil, fmt.Errorf("error while deleting product_variant_money_amount records")
+		}
+
+		moneyAmountRecords := []*model.MoneyAmountRecord{}
+
+		// create new money amount records
+		for _, price := range *input.Prices {
+			moneyAmountRecord, err := svc.models.MoneyAmountModel.Insert(ctx, tx, &model.MoneyAmountRecord{CurrencyCode: price.Code, Amount: price.Amount})
+
+			if err != nil {
+				return nil, fmt.Errorf("error while creating money_amount records")
+			}
+
+			moneyAmountRecords = append(moneyAmountRecords, moneyAmountRecord)
+
+		}
+
+		// create new product_variant_money_amount records
+		for _, moneyAmount := range moneyAmountRecords {
+			svc.models.ProductVariantMoneyAmountModel.Insert(ctx, tx, &model.ProductVariantMoneyAmountRecord{VariantId: variantId, MoneyAmountId: moneyAmount.Id})
+		}
+
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return variantRecord, nil
+
+}
+
+func (svc *ProductService) FindById(ctx context.Context, id string) (*DetailedProduct, error) {
+	product, err := svc.models.ProductModel.FindById(ctx, svc.db, id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	variants, err := svc.models.ProductVariantModel.FindAllByProductId(ctx, svc.db, id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	categories, err := svc.models.ProductCategoryProductModel.FindCategoriesForProduct(ctx, svc.db, product.Id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	productOptions, err := svc.models.ProductOptionModel.FindAllByProductId(ctx, svc.db, id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	variantPricesMap, err := svc.getVariantPricesMap(ctx, svc.db, id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	variantOptionValuesMap, err := svc.getVariantOptionValuesMap(ctx, svc.db, id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	imageIds, err := svc.models.EntityFileModel.FindAllFilesByEntityId(ctx, svc.db, id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return BuildDetailedProduct(product, imageIds, categories, productOptions, variants, variantPricesMap, variantOptionValuesMap), nil
+}
+
+func (svc *ProductService) getVariantPricesMap(ctx context.Context, conn sqldb.Connection, productId string) (map[string][]*model.MoneyAmountRecord, error) {
+	q := `SELECT ma.id, ma.currency_code, ma.amount, ma.created_at, ma.updated_at, pvma.variant_id 
+		  FROM product_variant_money_amount AS pvma 
+		  INNER JOIN money_amount AS ma ON pvma.money_amount_id = ma.id
+		  INNER JOIN product_variant AS pv ON pvma.variant_id = pv.id
+		  WHERE pv.product_id = $1`
+
+	rows, err := conn.QueryContext(ctx, q, productId)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	pricesMap := map[string][]*model.MoneyAmountRecord{}
+
+	for rows.Next() {
+		var record model.MoneyAmountRecord
+		var variantId string
+
+		err := rows.Scan(&record.Id, &record.CurrencyCode, &record.Amount, &record.CreatedAt, &record.UpdatedAt, &variantId)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if pricesMap[variantId] == nil {
+			pricesMap[variantId] = []*model.MoneyAmountRecord{&record}
+		} else {
+			pricesMap[variantId] = append(pricesMap[variantId], &record)
+		}
+
+	}
+
+	return pricesMap, nil
+}
+
+func (svc *ProductService) getVariantOptionValuesMap(ctx context.Context, conn sqldb.Connection, productId string) (map[string][]*model.ProductOptionValueRecord, error) {
+	q := `SELECT pov.id, pov.option_id, pov.variant_id, pov.title, pov.created_at, pov.updated_at, pov.deleted_at FROM product_option_value AS pov
+		  INNER JOIN product_variant as pv ON pv.id = pov.variant_id
+		  WHERE pv.product_id = $1`
+
+	rows, err := conn.QueryContext(ctx, q, productId)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	optionValuesMap := map[string][]*model.ProductOptionValueRecord{}
+
+	for rows.Next() {
+		var record model.ProductOptionValueRecord
+
+		err := rows.Scan(&record.Id, &record.OptionId, &record.VariantId, &record.Title, &record.CreatedAt, &record.UpdatedAt, &record.DeletedAt)
+
+		if err != nil {
+			return nil, err
+		}
+
+		variantId := record.VariantId
+
+		if optionValuesMap[variantId] == nil {
+			optionValuesMap[variantId] = []*model.ProductOptionValueRecord{&record}
+		} else {
+			optionValuesMap[variantId] = append(optionValuesMap[variantId], &record)
+		}
+
+	}
+
+	return optionValuesMap, nil
+}
+
+func (svc *ProductService) MarkProductAsDeleted(ctx context.Context, productId string) error {
+	err := svc.models.ProductModel.MarkAsDeleted(ctx, svc.db, productId)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

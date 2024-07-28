@@ -174,3 +174,32 @@ func (h *BaseHandler) BadRequestResponse(w http.ResponseWriter, r *http.Request,
 func (h *BaseHandler) FailedValidationResponse(w http.ResponseWriter, r *http.Request, errors map[string]string) {
 	h.ErrorResponse(w, r, http.StatusUnprocessableEntity, errors)
 }
+
+func (h *BaseHandler) InvalidCredentialsResponse(w http.ResponseWriter, r *http.Request) {
+	message := "invalid authentication credentials"
+	h.ErrorResponse(w, r, http.StatusUnauthorized, message)
+}
+func (h *BaseHandler) InvalidAuthenticationTokenResponse(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("WWWW-Authenticate", "Bearer")
+
+	message := "invalid or missing authentication token"
+	h.ErrorResponse(w, r, http.StatusUnauthorized, message)
+}
+
+func (h *BaseHandler) UnauthorizedResponse(w http.ResponseWriter, r *http.Request) {
+	message := "you must be authenticated to access this resource"
+
+	h.ErrorResponse(w, r, http.StatusUnauthorized, message)
+}
+
+func (h *BaseHandler) ForbiddenResponse(w http.ResponseWriter, r *http.Request) {
+	message := "your user account doesn't have the necessary permissions to access this resource"
+
+	h.ErrorResponse(w, r, http.StatusForbidden, message)
+}
+
+func (h *BaseHandler) AccountActivationRequiredResponse(w http.ResponseWriter, r *http.Request) {
+	message := "your user account is not activated yet"
+
+	h.ErrorResponse(w, r, http.StatusForbidden, message)
+}

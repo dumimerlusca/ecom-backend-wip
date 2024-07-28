@@ -59,8 +59,9 @@ func main() {
 		logger.PrintFatal(err, nil)
 	}
 
-	app := application{cfg: cfg, logger: logger, db: db, middleware: handlers.NewMiddleware(logger)}
+	app := application{cfg: cfg, logger: logger, db: db}
 	app.initServices()
+	app.middleware = handlers.NewMiddleware(logger, app.services)
 
 	err = app.serve()
 

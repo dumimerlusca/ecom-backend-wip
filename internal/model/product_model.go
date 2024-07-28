@@ -72,3 +72,20 @@ func (p *ProductModel) Update(ctx context.Context, conn sqldb.Connection, produc
 
 	return product, nil
 }
+
+func (p *ProductModel) MarkAsDeleted(ctx context.Context, conn sqldb.Connection, id string) error {
+	q := `UPDATE product SET deleted_at = $1 WHERE id = $2`
+
+	res, err := conn.ExecContext(ctx, q, time.Now(), id)
+
+	if err != nil {
+		return err
+	}
+
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		return ErrRecordNotFound
+	}
+
+	return nil
+
+}

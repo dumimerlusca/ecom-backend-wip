@@ -13,6 +13,8 @@ type Models struct {
 	ProductCategoryProductModel    *ProductCategoryProductModel
 	FileModel                      *FileModel
 	EntityFileModel                *EntityFileModel
+	UserModel                      *UserModel
+	TokenModel                     *TokenModel
 }
 
 func NewModels(conn sqldb.Connection) *Models {
@@ -27,5 +29,7 @@ func NewModels(conn sqldb.Connection) *Models {
 		ProductCategoryProductModel:    NewProductCategoryProductModel(),
 		FileModel:                      NewFileModel(),
 		EntityFileModel:                NewEntityFileModel(),
+		UserModel:                      NewUserModel(),
+		TokenModel:                     NewTokenModel(),
 	}
 }

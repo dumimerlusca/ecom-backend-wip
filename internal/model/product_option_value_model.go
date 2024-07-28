@@ -33,3 +33,15 @@ func (m *ProductOptionValueModel) Insert(ctx context.Context, conn sqldb.Connect
 
 	return value, nil
 }
+
+func (m *ProductOptionValueModel) DeleteAllByVariantId(ctx context.Context, conn sqldb.Connection, variantId string) error {
+	q := `DELETE FROM product_option_value WHERE variant_id = $1`
+
+	_, err := conn.ExecContext(ctx, q, variantId)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
