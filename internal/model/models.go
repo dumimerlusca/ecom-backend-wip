@@ -15,6 +15,7 @@ type Models struct {
 	EntityFileModel                *EntityFileModel
 	UserModel                      *UserModel
 	TokenModel                     *TokenModel
+	WishlistModel                  *WishlistModel
 }
 
 func NewModels(conn sqldb.Connection) *Models {
@@ -31,5 +32,6 @@ func NewModels(conn sqldb.Connection) *Models {
 		EntityFileModel:                NewEntityFileModel(),
 		UserModel:                      NewUserModel(),
 		TokenModel:                     NewTokenModel(),
+		WishlistModel:                  NewWishlistModel(),
 	}
 }

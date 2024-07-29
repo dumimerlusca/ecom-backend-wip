@@ -47,6 +47,9 @@ func (p *ProductModel) FindById(ctx context.Context, conn sqldb.Connection, id s
 	err := conn.QueryRowContext(ctx, q, id).Scan(&product.Id, &product.Title, &product.Subtitle, &product.Description, &product.ThumbnailId, &product.Status, &product.CreatedAt, &product.UpdatedAt, &product.DeletedAt)
 
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
 		return nil, err
 	}
 

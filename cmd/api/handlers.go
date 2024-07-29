@@ -7,6 +7,7 @@ type Handlers struct {
 	productCategories *handlers.ProductCategoryHandler
 	fileUpload        *handlers.UploadHandler
 	auth              *handlers.AuthHandler
+	wishlist          *handlers.WishlistHandler
 }
 
 func (app *application) createHandlers() *Handlers {
@@ -15,5 +16,6 @@ func (app *application) createHandlers() *Handlers {
 		productCategories: handlers.NewProductCategoryHandler(app.logger, app.services.ProductCategory),
 		fileUpload:        handlers.NewUploadHandler(app.logger, app.services.Upload),
 		auth:              handlers.NewAuthHandler(app.logger, app.services.Auth),
+		wishlist:          handlers.NewWishlistHandler(app.logger, app.services.Wishlist),
 	}
 }

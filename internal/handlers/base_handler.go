@@ -203,3 +203,9 @@ func (h *BaseHandler) AccountActivationRequiredResponse(w http.ResponseWriter, r
 
 	h.ErrorResponse(w, r, http.StatusForbidden, message)
 }
+
+func (h *BaseHandler) SessionOrUserRequiredResponse(w http.ResponseWriter, r *http.Request) {
+	message := "you must provide a valid session id or be authenticated"
+
+	h.ErrorResponse(w, r, http.StatusUnauthorized, message)
+}

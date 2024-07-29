@@ -20,7 +20,7 @@ func NewProductCategoryHandler(logger *jsonlog.Logger, productCategorySvc *servi
 	return &ProductCategoryHandler{BaseHandler: BaseHandler{logger: logger}, productCategorySvc: productCategorySvc}
 }
 
-func (h *ProductCategoryHandler) Create(w http.ResponseWriter, r *http.Request) {
+func (h *ProductCategoryHandler) Create(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	input := struct {
 		Name     string  `json:"name"`
 		ParentId *string `json:"parent_id"`
@@ -60,7 +60,7 @@ func (h *ProductCategoryHandler) Create(w http.ResponseWriter, r *http.Request) 
 	h.WriteJson(w, http.StatusCreated, ResponseBody{Payload: Envelope{"category": productCategoryRecord}}, nil)
 }
 
-func (h *ProductCategoryHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+func (h *ProductCategoryHandler) GetAll(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	categories, err := h.productCategorySvc.GetAll(r.Context())
 
 	if err != nil {

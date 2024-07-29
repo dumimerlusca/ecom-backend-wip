@@ -145,3 +145,13 @@ CREATE TABLE IF NOT EXISTS token (
     expiry timestamp with time zone NOT NULL,
     scope text NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS wishlist (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    user_identifier text NOT NULL,
+    variant_id uuid NOT NULL REFERENCES product_variant ON DELETE CASCADE,
+    created_at timestamp NOT NULL DEFAULT now(),
+    CONSTRAINT duplicate_product_in_favorites_not_allowed UNIQUE(user_identifier, variant_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_wishlist_user_identifier ON wishlist(user_identifier);

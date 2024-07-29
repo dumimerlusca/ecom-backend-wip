@@ -7,6 +7,9 @@ import (
 	"ecom-backend/internal/validator"
 	"errors"
 	"net/http"
+
+	"github.com/google/uuid"
+	"github.com/julienschmidt/httprouter"
 )
 
 type AuthHandler struct {
@@ -86,6 +89,39 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err = h.WriteJson(w, http.StatusOK, Envelope{"authentication_token": token}, nil)
+
+	if err != nil {
+		h.ServerErrorResponse(w, r, err)
+	}
+}
+
+type CurrentSessionDTO struct {
+	SID  *string           `json:"sid"`
+	User *model.UserRecord `json:"user"`
+}
+
+func (h *AuthHandler) GetSession(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	user := contextGetUser(r)
+	sid := getSessionId(r)
+
+	dto := CurrentSessionDTO{}
+
+	if isAnonymousUser(user) {
+		dto.User = nil
+
+		if sid != "" {
+			dto.SID = &sid
+		} else {
+			uuid := uuid.NewString()
+			dto.SID = &uuid
+		}
+
+	} else {
+		dto.User = user
+		dto.SID = nil
+	}
+
+	err := h.WriteJson(w, http.StatusOK, dto, nil)
 
 	if err != nil {
 		h.ServerErrorResponse(w, r, err)

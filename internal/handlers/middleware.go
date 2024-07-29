@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/julienschmidt/httprouter"
 )
 
 type Middleware struct {
@@ -45,7 +47,6 @@ func (mid *Middleware) RecoverPanic(next http.Handler) http.Handler {
 var AnonymousUser = &model.UserRecord{}
 
 func isAnonymousUser(user *model.UserRecord) bool {
-	fmt.Println(user == AnonymousUser)
 	return user == AnonymousUser
 }
 
@@ -55,6 +56,10 @@ func (mid *Middleware) Authenticate(next http.Handler) http.Handler {
 
 		if authorizationHeader == "" {
 			r = contextSetUser(r, AnonymousUser)
+
+			sid := getSessionId(r)
+			r = contextSetClientIdentifier(r, sid)
+
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -81,13 +86,14 @@ func (mid *Middleware) Authenticate(next http.Handler) http.Handler {
 		}
 
 		r = contextSetUser(r, user)
+		r = contextSetClientIdentifier(r, user.Id)
 
 		next.ServeHTTP(w, r)
 	})
 }
 
-func (mid *Middleware) RequireActivation(next http.HandlerFunc) http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func (mid *Middleware) RequireActivation(next httprouter.Handle) httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		user := contextGetUser(r)
 
 		if isAnonymousUser(user) {
@@ -98,6 +104,66 @@ func (mid *Middleware) RequireActivation(next http.HandlerFunc) http.HandlerFunc
 		if !user.Activated {
 			mid.ForbiddenResponse(w, r)
 			return
+		}
+
+		next(w, r, ps)
+	}
+}
+
+func (mid *Middleware) RequireSessionOrUser(next httprouter.Handle) httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+		clientIdentifier := contextGetClientIdentifier(r)
+
+		if clientIdentifier == "" {
+			mid.SessionOrUserRequiredResponse(w, r)
+			return
+		}
+
+		next(w, r, ps)
+	}
+}
+
+func (mid *Middleware) AdminOnly(next httprouter.Handle) httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+		user := contextGetUser(r)
+
+		if isAnonymousUser(user) {
+			mid.UnauthorizedResponse(w, r)
+			return
+		}
+
+		if !user.IsAdmin {
+			mid.ForbiddenResponse(w, r)
+			return
+		}
+
+		next(w, r, ps)
+	}
+}
+
+func (mid *Middleware) EnableCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Vary", "Origin")
+		// Add the "Vary: Access-Control-Request-Method" header.
+		w.Header().Add("Vary", "Access-Control-Request-Method")
+		origin := r.Header.Get("Origin")
+
+		// TODO Add the config back
+		if origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			// Check if the request has the HTTP method OPTIONS and contains the
+			// "Access-Control-Request-Method" header. If it does, then we treat
+			// it as a preflight request.
+			if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
+				// Set the necessary preflight response headers, as discussed
+				// previously.
+				w.Header().Set("Access-Control-Allow-Methods", "OPTIONS, PUT, PATCH, DELETE")
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Session-ID")
+				// Write the headers along with a 200 OK status and return from
+				// the middleware with no further action.
+				w.WriteHeader(http.StatusOK)
+				return
+			}
 		}
 
 		next.ServeHTTP(w, r)

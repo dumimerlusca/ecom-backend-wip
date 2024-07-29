@@ -20,7 +20,7 @@ func NewUploadHandler(logger *jsonlog.Logger, uploadSvc *service.UploadService) 
 	return &UploadHandler{BaseHandler: BaseHandler{logger: logger}, uploadSvc: uploadSvc}
 }
 
-func (h *UploadHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
+func (h *UploadHandler) UploadFile(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	err := r.ParseMultipartForm(10 << 20)
 	if err != nil {
 		h.ServerErrorResponse(w, r, err)

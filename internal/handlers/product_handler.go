@@ -20,7 +20,7 @@ func NewProductHandler(logger *jsonlog.Logger, productSvc *service.ProductServic
 	return &ProductHandler{BaseHandler: BaseHandler{logger: logger}, productSvc: productSvc}
 }
 
-func (h *ProductHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
+func (h *ProductHandler) CreateProduct(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	input := service.CreateProductInput{}
 
 	err := h.ReadJSON(w, r, &input)
@@ -146,7 +146,7 @@ func (h *ProductHandler) UpdateVariantDetails(w http.ResponseWriter, r *http.Req
 	h.WriteJson(w, http.StatusOK, Envelope{"success": true}, nil)
 }
 
-func (h *ProductHandler) GetProducts(w http.ResponseWriter, r *http.Request) {
+func (h *ProductHandler) GetProducts(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	h.WriteJson(w, 200, "Get products", nil)
 }
 func (h *ProductHandler) GetProduct(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -160,6 +160,11 @@ func (h *ProductHandler) GetProduct(w http.ResponseWriter, r *http.Request, ps h
 	product, err := h.productSvc.FindById(r.Context(), productId)
 
 	if err != nil {
+		if errors.Is(err, model.ErrRecordNotFound) {
+			h.NotFoundResponse(w, r)
+			return
+		}
+
 		h.ServerErrorResponse(w, r, err)
 		return
 	}

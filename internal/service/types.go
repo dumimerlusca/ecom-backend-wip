@@ -20,6 +20,7 @@ type DetailedProduct struct {
 	Images      []ProductImage           `json:"images"`
 	Variants    []DetailedProductVariant `json:"variants"`
 	Categories  []ProductCategoryInfo    `json:"categories"`
+	Options     []ProductOptionDTO       `json:"options"`
 }
 
 type DetailedProductVariant struct {
@@ -37,10 +38,14 @@ type DetailedProductVariant struct {
 	CreatedAt         time.Time            `json:"created_at"`
 	UpdatedAt         time.Time            `json:"updated_at"`
 	DeletedAt         *time.Time           `json:"deleted_at"`
-	Prices            []VariantPrice       `json:"prices"`
+	Prices            []VariantPriceDTO    `json:"prices"`
 	Options           []VariantOptionValue `json:"options"`
 }
 
+type ProductOptionDTO struct {
+	Id    string `json:"id"`
+	Title string `json:"title"`
+}
 type ProductImage struct {
 	Id string `json:"id"`
 }
@@ -50,7 +55,7 @@ type ProductCategoryInfo struct {
 	Name string `json:"name"`
 }
 
-type VariantPrice struct {
+type VariantPriceDTO struct {
 	Id           string     `json:"id"`
 	CurrencyCode string     `json:"currency_code"`
 	Amount       float32    `json:"amount"`
@@ -90,6 +95,10 @@ func BuildDetailedProduct(
 
 	}
 
+	for _, option := range optionRecords {
+		dp.Options = append(dp.Options, ProductOptionDTO{Id: option.Id, Title: option.Title})
+	}
+
 	for _, imageId := range productImages {
 		dp.Images = append(dp.Images, ProductImage{Id: imageId})
 	}
@@ -123,9 +132,9 @@ func BuildDetailedProduct(
 		dpv.UpdatedAt = variantRecord.UpdatedAt
 		dpv.DeletedAt = variantRecord.DeletedAt
 
-		dpv.Prices = []VariantPrice{}
+		dpv.Prices = []VariantPriceDTO{}
 		for _, moneyAmountRecord := range variantMoneyAmountRecords[variantRecord.Id] {
-			vp := VariantPrice{}
+			vp := VariantPriceDTO{}
 			vp.Id = moneyAmountRecord.Id
 			vp.CurrencyCode = moneyAmountRecord.CurrencyCode
 			vp.Amount = moneyAmountRecord.Amount

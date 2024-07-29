@@ -11,4 +11,6 @@ var (
 	ErrParentProductCategoryNotFound       = errors.New("parent product category not found")
 	ErrFileNotFound                        = errors.New("file not found")
 	ErrDuplicatedEmail                     = errors.New("duplicated email")
+	ErrInvalidValue                        = errors.New("invalid value")
+	ErrProductAlreadyWishlisted            = errors.New("product already wishlisted")
 )
