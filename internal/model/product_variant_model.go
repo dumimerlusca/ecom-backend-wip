@@ -6,6 +6,8 @@ import (
 	"ecom-backend/pkg/sqldb"
 	"errors"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 type ProductVariantRecord struct {
@@ -83,16 +85,18 @@ func (p *ProductVariantModel) Update(ctx context.Context, conn sqldb.Connection,
 	return variant, nil
 }
 
-func (p *ProductVariantModel) FindAllByProductId(ctx context.Context, conn sqldb.Connection, productId string) ([]*ProductVariantRecord, error) {
-	q := `SELECT id, product_id, title, sku, barcode, material, weight, length, width, height, inventory_quantity, created_at, updated_at, deleted_at FROM product_variant WHERE product_id = $1`
+func (p *ProductVariantModel) FindAllByProductIds(ctx context.Context, conn sqldb.Connection, productIds []string) (map[string][]*ProductVariantRecord, error) {
+	q := `SELECT id, product_id, title, sku, barcode, material, weight, length, width, height, inventory_quantity, created_at, updated_at, deleted_at FROM product_variant WHERE product_id = ANY($1)`
 
-	rows, err := conn.QueryContext(ctx, q, productId)
-
-	variants := []*ProductVariantRecord{}
+	rows, err := conn.QueryContext(ctx, q, pq.Array(productIds))
 
 	if err != nil {
 		return nil, err
 	}
+
+	defer rows.Close()
+
+	variantsMap := make(map[string][]*ProductVariantRecord)
 
 	for rows.Next() {
 		var variant ProductVariantRecord
@@ -103,9 +107,12 @@ func (p *ProductVariantModel) FindAllByProductId(ctx context.Context, conn sqldb
 			return nil, err
 		}
 
-		variants = append(variants, &variant)
+		if variantsMap[variant.ProductId] == nil {
+			variantsMap[variant.ProductId] = []*ProductVariantRecord{}
+		}
 
+		variantsMap[variant.ProductId] = append(variantsMap[variant.ProductId], &variant)
 	}
 
-	return variants, nil
+	return variantsMap, nil
 }

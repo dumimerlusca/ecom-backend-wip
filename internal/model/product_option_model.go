@@ -4,6 +4,8 @@ import (
 	"context"
 	"ecom-backend/pkg/sqldb"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 type ProductOptionRecord struct {
@@ -49,16 +51,16 @@ func (p *ProductOptionModel) DeleteAllByProductId(ctx context.Context, conn sqld
 	return nil
 }
 
-func (p *ProductOptionModel) FindAllByProductId(ctx context.Context, conn sqldb.Connection, productId string) ([]*ProductOptionRecord, error) {
-	q := `SELECT id, product_id, title, created_at, updated_at, deleted_at FROM product_option WHERE product_id = $1`
+func (p *ProductOptionModel) FindForProducts(ctx context.Context, conn sqldb.Connection, productIds []string) (map[string][]*ProductOptionRecord, error) {
+	q := `SELECT id, product_id, title, created_at, updated_at, deleted_at FROM product_option WHERE product_id = ANY($1)`
 
-	rows, err := conn.QueryContext(ctx, q, productId)
+	rows, err := conn.QueryContext(ctx, q, pq.Array(productIds))
 
 	if err != nil {
 		return nil, err
 	}
 
-	list := []*ProductOptionRecord{}
+	resultMap := make(map[string][]*ProductOptionRecord)
 
 	for rows.Next() {
 		var record ProductOptionRecord
@@ -69,8 +71,12 @@ func (p *ProductOptionModel) FindAllByProductId(ctx context.Context, conn sqldb.
 			return nil, err
 		}
 
-		list = append(list, &record)
+		if resultMap[record.ProductId] == nil {
+			resultMap[record.ProductId] = []*ProductOptionRecord{}
+		}
+
+		resultMap[record.ProductId] = append(resultMap[record.ProductId], &record)
 	}
 
-	return list, nil
+	return resultMap, nil
 }

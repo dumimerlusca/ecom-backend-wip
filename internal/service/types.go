@@ -7,23 +7,30 @@ import (
 	"time"
 )
 
-type DetailedProduct struct {
-	Id          string                   `json:"id"`
-	Title       string                   `json:"title"`
-	Subtitle    *string                  `json:"subtitle"`
-	Description string                   `json:"description"`
-	Thumbnail   *ProductImage            `json:"thumbnail"`
-	Status      string                   `json:"status"`
-	CreatedAt   time.Time                `json:"created_at"`
-	UpdatedAt   time.Time                `json:"updated_at"`
-	DeletedAt   *time.Time               `json:"deleted_at"`
-	Images      []ProductImage           `json:"images"`
-	Variants    []DetailedProductVariant `json:"variants"`
-	Categories  []ProductCategoryInfo    `json:"categories"`
-	Options     []ProductOptionDTO       `json:"options"`
+type AggregateProductListFields struct {
+	Variants   []AggregateProductVariant `json:"variants"`
+	Categories []ProductCategoryInfo     `json:"categories"`
+	Options    []ProductOptionDTO        `json:"options"`
+	Images     []ProductImage            `json:"images"`
 }
 
-type DetailedProductVariant struct {
+type AggregateProduct struct {
+	Id          string                    `json:"id"`
+	Title       string                    `json:"title"`
+	Subtitle    *string                   `json:"subtitle"`
+	Description string                    `json:"description"`
+	Thumbnail   *ProductImage             `json:"thumbnail"`
+	Status      string                    `json:"status"`
+	CreatedAt   time.Time                 `json:"created_at"`
+	UpdatedAt   time.Time                 `json:"updated_at"`
+	DeletedAt   *time.Time                `json:"deleted_at"`
+	Variants    []AggregateProductVariant `json:"variants"`
+	Categories  []ProductCategoryInfo     `json:"categories"`
+	Options     []ProductOptionDTO        `json:"options"`
+	Images      []ProductImage            `json:"images"`
+}
+
+type AggregateProductVariant struct {
 	Id                string               `json:"id"`
 	ProductId         string               `json:"product_id"`
 	Title             string               `json:"title"`
@@ -70,53 +77,63 @@ type VariantOptionValue struct {
 	OptionId string `json:"option_id"`
 }
 
-func BuildDetailedProduct(
-	productRecord *model.ProductRecord,
+func BuildAggregateProduct(productRecord *model.ProductRecord, aggListFields *AggregateProductListFields) *AggregateProduct {
+	p := AggregateProduct{}
+
+	p.Id = productRecord.Id
+	p.Title = productRecord.Title
+	p.Subtitle = productRecord.Subtitle
+	p.Description = productRecord.Description
+	p.Status = productRecord.Status
+	p.CreatedAt = productRecord.CreatedAt
+	p.UpdatedAt = productRecord.UpdatedAt
+	p.DeletedAt = productRecord.DeletedAt
+
+	if productRecord.ThumbnailId != nil {
+		p.Thumbnail = &ProductImage{Id: *productRecord.ThumbnailId}
+
+	}
+
+	p.Variants = aggListFields.Variants
+	p.Options = aggListFields.Options
+	p.Categories = aggListFields.Categories
+	p.Images = aggListFields.Images
+
+	return &p
+}
+
+func BuildAggregateFieldsList(
 	productImages []string,
 	categoryRecords []*model.ProductCategoryRecord,
 	optionRecords []*model.ProductOptionRecord,
 	variantRecords []*model.ProductVariantRecord,
 	variantMoneyAmountRecords map[string][]*model.MoneyAmountRecord,
-	variantOptionValueRecords map[string][]*model.ProductOptionValueRecord) *DetailedProduct {
+	variantOptionValueRecords map[string][]*model.ProductOptionValueRecord) *AggregateProductListFields {
 
-	dp := DetailedProduct{}
-
-	dp.Id = productRecord.Id
-	dp.Title = productRecord.Title
-	dp.Subtitle = productRecord.Subtitle
-	dp.Description = productRecord.Description
-	dp.Status = productRecord.Status
-	dp.CreatedAt = productRecord.CreatedAt
-	dp.UpdatedAt = productRecord.UpdatedAt
-	dp.DeletedAt = productRecord.DeletedAt
-
-	if productRecord.ThumbnailId != nil {
-		dp.Thumbnail = &ProductImage{Id: *productRecord.ThumbnailId}
-
-	}
+	agg := AggregateProductListFields{}
 
 	for _, option := range optionRecords {
-		dp.Options = append(dp.Options, ProductOptionDTO{Id: option.Id, Title: option.Title})
+		agg.Options = append(agg.Options, ProductOptionDTO{Id: option.Id, Title: option.Title})
 	}
 
 	for _, imageId := range productImages {
-		dp.Images = append(dp.Images, ProductImage{Id: imageId})
+		agg.Images = append(agg.Images, ProductImage{Id: imageId})
 	}
 
-	dp.Categories = []ProductCategoryInfo{}
+	agg.Categories = []ProductCategoryInfo{}
 
 	for _, categoryRecord := range categoryRecords {
 		pci := ProductCategoryInfo{}
 		pci.Id = categoryRecord.Id
 		pci.Name = categoryRecord.Name
 
-		dp.Categories = append(dp.Categories, pci)
+		agg.Categories = append(agg.Categories, pci)
 	}
 
-	dp.Variants = []DetailedProductVariant{}
+	agg.Variants = []AggregateProductVariant{}
 
 	for _, variantRecord := range variantRecords {
-		dpv := DetailedProductVariant{}
+		dpv := AggregateProductVariant{}
 		dpv.Id = variantRecord.Id
 		dpv.ProductId = variantRecord.ProductId
 		dpv.Title = variantRecord.Title
@@ -156,10 +173,10 @@ func BuildDetailedProduct(
 			dpv.Options = append(dpv.Options, vov)
 		}
 
-		dp.Variants = append(dp.Variants, dpv)
+		agg.Variants = append(agg.Variants, dpv)
 	}
 
-	return &dp
+	return &agg
 }
 
 type CreateProductInput struct {

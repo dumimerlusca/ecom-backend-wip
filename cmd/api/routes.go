@@ -38,7 +38,7 @@ func (app *application) routes() http.Handler {
 
 	// File upload
 	router.POST("/api/v1/upload", m.RequireActivation(h.fileUpload.UploadFile))
-	router.GET("/api/v1/files/:fileId", m.RequireActivation(h.fileUpload.ServerFile))
+	router.GET("/api/v1/files/:fileId", h.fileUpload.ServerFile)
 
 	// Auth
 	router.HandlerFunc(http.MethodPost, "/api/v1/users", h.auth.RegisterUser)

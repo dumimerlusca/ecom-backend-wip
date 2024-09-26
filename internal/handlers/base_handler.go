@@ -15,6 +15,13 @@ type ResponseBody struct {
 	Payload  interface{} `json:"payload,omitempty"`
 	Metadata interface{} `json:"metadata,omitempty"`
 }
+
+type PaginationMetadata struct {
+	Page      int `json:"page"`
+	PageSize  int `json:"pageSize"`
+	RowsTotal int `json:"rowsTotal"`
+}
+
 type Envelope map[string]interface{}
 type BaseHandler struct {
 	logger *jsonlog.Logger

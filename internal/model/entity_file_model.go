@@ -4,6 +4,8 @@ import (
 	"context"
 	"ecom-backend/pkg/sqldb"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 // reusable junction table for each entity that can own files ( ex: products, users, etc  )
@@ -52,29 +54,35 @@ func (e *EntityFileModel) DeleteAllByEntityId(ctx context.Context, conn sqldb.Co
 	return nil
 }
 
-func (e *EntityFileModel) FindAllFilesByEntityId(ctx context.Context, conn sqldb.Connection, entityId string) ([]string, error) {
-	q := `SELECT file_id FROM entity_file
-		  WHERE entity_id = $1`
+func (e *EntityFileModel) FindAllFilesByEntityId(ctx context.Context, conn sqldb.Connection, entityIds []string) (map[string][]string, error) {
+	q := `SELECT file_id, entity_id FROM entity_file
+		  WHERE entity_id = ANY($1)`
 
-	rows, err := conn.QueryContext(ctx, q, entityId)
+	rows, err := conn.QueryContext(ctx, q, pq.Array(entityIds))
 
 	if err != nil {
 		return nil, err
 	}
 
-	fileIds := []string{}
+	resultMap := make(map[string][]string)
 
 	for rows.Next() {
 		var fileId string
+		var entityId string
 
-		err := rows.Scan(&fileId)
+		err := rows.Scan(&fileId, &entityId)
 
 		if err != nil {
 			return nil, err
 		}
 
-		fileIds = append(fileIds, fileId)
+		if resultMap[entityId] == nil {
+			resultMap[entityId] = []string{}
+		}
+
+		resultMap[entityId] = append(resultMap[entityId], fileId)
+
 	}
 
-	return fileIds, nil
+	return resultMap, nil
 }

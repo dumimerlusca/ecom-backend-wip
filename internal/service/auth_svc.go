@@ -103,7 +103,7 @@ func (svc *AuthService) LoginUser(ctx context.Context, input LoginUserInput) (*T
 		}
 	}
 
-	token, err := svc.tokenSvc.NewToken(ctx, user.Id, time.Minute*60, ScopeAuthentication)
+	token, err := svc.tokenSvc.NewToken(ctx, user.Id, time.Minute*60*24, ScopeAuthentication)
 
 	if err != nil {
 		return nil, err

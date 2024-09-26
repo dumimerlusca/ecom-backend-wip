@@ -7,6 +7,8 @@ import (
 	"ecom-backend/pkg/sqldb"
 	"errors"
 	"fmt"
+
+	"github.com/lib/pq"
 )
 
 type ProductService struct {
@@ -18,7 +20,7 @@ func NewProductService(db *sql.DB, models *model.Models) *ProductService {
 	return &ProductService{db: db, models: models}
 }
 
-func (svc *ProductService) CreateProduct(ctx context.Context, input *CreateProductInput) (*DetailedProduct, error) {
+func (svc *ProductService) CreateProduct(ctx context.Context, input *CreateProductInput) (*AggregateProduct, error) {
 
 	productCategoryRecords := []*model.ProductCategoryRecord{}
 	productOptionRecords := []*model.ProductOptionRecord{}
@@ -145,10 +147,11 @@ func (svc *ProductService) CreateProduct(ctx context.Context, input *CreateProdu
 		return nil, err
 	}
 
-	// populate the final product
-	finalProduct := BuildDetailedProduct(product, imageIds, productCategoryRecords, productOptionRecords, variantRecords, moneyAmountRecords, variantOptionValueRecords)
+	aggFields := BuildAggregateFieldsList(imageIds, productCategoryRecords, productOptionRecords, variantRecords, moneyAmountRecords, variantOptionValueRecords)
 
-	return finalProduct, nil
+	aggProduct := BuildAggregateProduct(product, aggFields)
+
+	return aggProduct, nil
 }
 
 func (svc *ProductService) UpdateProductDetails(ctx context.Context, productId string, input *UpdateProductInput) (*model.ProductRecord, error) {
@@ -356,60 +359,145 @@ func (svc *ProductService) UpdateVariantDetails(ctx context.Context, variantId s
 
 }
 
-func (svc *ProductService) FindById(ctx context.Context, id string) (*DetailedProduct, error) {
+func (svc *ProductService) ListProducts(ctx context.Context, opt ProductListingOptions) ([]*model.ProductRecord, int, error) {
+	limit := opt.PageSize
+	offset := (opt.Page - 1) * opt.PageSize
+
+	totalCountQ := `SELECT COUNT(*) from product WHERE deleted_at IS NULL`
+	var totalCount int
+	err := svc.db.QueryRowContext(ctx, totalCountQ).Scan(&totalCount)
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	q := `SELECT id, title, subtitle, description, thumbnail_id, status, created_at, updated_at, deleted_at FROM product WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT $1 OFFSET $2`
+
+	rows, err := svc.db.QueryContext(ctx, q, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	productsList := []*model.ProductRecord{}
+
+	for rows.Next() {
+		var product model.ProductRecord
+
+		err := rows.Scan(&product.Id, &product.Title, &product.Subtitle, &product.Description, &product.ThumbnailId, &product.Status, &product.CreatedAt, &product.UpdatedAt, &product.DeletedAt)
+
+		if err != nil {
+			return nil, 0, err
+		}
+
+		productsList = append(productsList, &product)
+	}
+
+	return productsList, totalCount, nil
+}
+
+type ProductListingOptions struct {
+	Page     uint
+	PageSize uint
+}
+
+func (svc *ProductService) ListAggregateProducts(ctx context.Context, opt ProductListingOptions) ([]*AggregateProduct, int, error) {
+	products, rowCount, err := svc.ListProducts(ctx, opt)
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	productIds := []string{}
+
+	for _, p := range products {
+		productIds = append(productIds, p.Id)
+	}
+
+	aggFieldsMap, err := svc.GetAggregateFieldsForProductsList(ctx, productIds)
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	aggProductList := []*AggregateProduct{}
+
+	for _, p := range products {
+		aggProductList = append(aggProductList, BuildAggregateProduct(p, aggFieldsMap[p.Id]))
+	}
+
+	return aggProductList, rowCount, nil
+}
+
+func (svc *ProductService) GetAggregateFieldsForProductsList(ctx context.Context, productIds []string) (map[string]*AggregateProductListFields, error) {
+	variantsMap, err := svc.models.ProductVariantModel.FindAllByProductIds(ctx, svc.db, productIds)
+
+	if err != nil {
+		return nil, err
+	}
+
+	categoriesMap, err := svc.models.ProductCategoryProductModel.FindCategoriesForProducts(ctx, svc.db, productIds)
+
+	if err != nil {
+		return nil, err
+	}
+
+	productOptionsMap, err := svc.models.ProductOptionModel.FindForProducts(ctx, svc.db, productIds)
+
+	if err != nil {
+		return nil, err
+	}
+
+	variantPricesMap, err := svc.getVariantPricesMap(ctx, svc.db, productIds)
+
+	if err != nil {
+		return nil, err
+	}
+
+	variantOptionValuesMap, err := svc.getVariantOptionValuesMap(ctx, svc.db, productIds)
+
+	if err != nil {
+		return nil, err
+	}
+
+	imageIds, err := svc.models.EntityFileModel.FindAllFilesByEntityId(ctx, svc.db, productIds)
+
+	if err != nil {
+		return nil, err
+	}
+
+	resultMap := make(map[string]*AggregateProductListFields)
+
+	for _, id := range productIds {
+		resultMap[id] = BuildAggregateFieldsList(imageIds[id], categoriesMap[id], productOptionsMap[id], variantsMap[id], variantPricesMap[id], variantOptionValuesMap[id])
+	}
+
+	return resultMap, nil
+}
+
+func (svc *ProductService) GetAggregateProductById(ctx context.Context, id string) (*AggregateProduct, error) {
 	product, err := svc.models.ProductModel.FindById(ctx, svc.db, id)
 
 	if err != nil {
 		return nil, err
 	}
 
-	variants, err := svc.models.ProductVariantModel.FindAllByProductId(ctx, svc.db, id)
+	aggFieldsMap, err := svc.GetAggregateFieldsForProductsList(ctx, []string{id})
 
 	if err != nil {
 		return nil, err
 	}
 
-	categories, err := svc.models.ProductCategoryProductModel.FindCategoriesForProduct(ctx, svc.db, product.Id)
-
-	if err != nil {
-		return nil, err
-	}
-
-	productOptions, err := svc.models.ProductOptionModel.FindAllByProductId(ctx, svc.db, id)
-
-	if err != nil {
-		return nil, err
-	}
-
-	variantPricesMap, err := svc.getVariantPricesMap(ctx, svc.db, id)
-
-	if err != nil {
-		return nil, err
-	}
-
-	variantOptionValuesMap, err := svc.getVariantOptionValuesMap(ctx, svc.db, id)
-
-	if err != nil {
-		return nil, err
-	}
-
-	imageIds, err := svc.models.EntityFileModel.FindAllFilesByEntityId(ctx, svc.db, id)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return BuildDetailedProduct(product, imageIds, categories, productOptions, variants, variantPricesMap, variantOptionValuesMap), nil
+	return BuildAggregateProduct(product, aggFieldsMap[id]), nil
 }
 
-func (svc *ProductService) getVariantPricesMap(ctx context.Context, conn sqldb.Connection, productId string) (map[string][]*model.MoneyAmountRecord, error) {
-	q := `SELECT ma.id, ma.currency_code, ma.amount, ma.created_at, ma.updated_at, pvma.variant_id 
+func (svc *ProductService) getVariantPricesMap(ctx context.Context, conn sqldb.Connection, productIds []string) (map[string]map[string][]*model.MoneyAmountRecord, error) {
+	q := `SELECT ma.id, ma.currency_code, ma.amount, ma.created_at, ma.updated_at, pvma.variant_id, pv.product_id
 		  FROM product_variant_money_amount AS pvma 
 		  INNER JOIN money_amount AS ma ON pvma.money_amount_id = ma.id
 		  INNER JOIN product_variant AS pv ON pvma.variant_id = pv.id
-		  WHERE pv.product_id = $1`
+		  WHERE pv.product_id = ANY($1)`
 
-	rows, err := conn.QueryContext(ctx, q, productId)
+	rows, err := conn.QueryContext(ctx, q, pq.Array(productIds))
 
 	if err != nil {
 		return nil, err
@@ -417,35 +505,40 @@ func (svc *ProductService) getVariantPricesMap(ctx context.Context, conn sqldb.C
 
 	defer rows.Close()
 
-	pricesMap := map[string][]*model.MoneyAmountRecord{}
+	pricesMap := map[string]map[string][]*model.MoneyAmountRecord{}
 
 	for rows.Next() {
 		var record model.MoneyAmountRecord
 		var variantId string
+		var productId string
 
-		err := rows.Scan(&record.Id, &record.CurrencyCode, &record.Amount, &record.CreatedAt, &record.UpdatedAt, &variantId)
+		err := rows.Scan(&record.Id, &record.CurrencyCode, &record.Amount, &record.CreatedAt, &record.UpdatedAt, &variantId, &productId)
 
 		if err != nil {
 			return nil, err
 		}
 
-		if pricesMap[variantId] == nil {
-			pricesMap[variantId] = []*model.MoneyAmountRecord{&record}
-		} else {
-			pricesMap[variantId] = append(pricesMap[variantId], &record)
+		if pricesMap[productId] == nil {
+			pricesMap[productId] = make(map[string][]*model.MoneyAmountRecord)
 		}
+
+		if pricesMap[productId][variantId] == nil {
+			pricesMap[productId][variantId] = []*model.MoneyAmountRecord{}
+		}
+
+		pricesMap[productId][variantId] = append(pricesMap[productId][variantId], &record)
 
 	}
 
 	return pricesMap, nil
 }
 
-func (svc *ProductService) getVariantOptionValuesMap(ctx context.Context, conn sqldb.Connection, productId string) (map[string][]*model.ProductOptionValueRecord, error) {
-	q := `SELECT pov.id, pov.option_id, pov.variant_id, pov.title, pov.created_at, pov.updated_at, pov.deleted_at FROM product_option_value AS pov
+func (svc *ProductService) getVariantOptionValuesMap(ctx context.Context, conn sqldb.Connection, productIds []string) (map[string]map[string][]*model.ProductOptionValueRecord, error) {
+	q := `SELECT pov.id, pov.option_id, pov.variant_id, pov.title, pov.created_at, pov.updated_at, pov.deleted_at, pv.product_id FROM product_option_value AS pov
 		  INNER JOIN product_variant as pv ON pv.id = pov.variant_id
-		  WHERE pv.product_id = $1`
+		  WHERE pv.product_id = ANY($1)`
 
-	rows, err := conn.QueryContext(ctx, q, productId)
+	rows, err := conn.QueryContext(ctx, q, pq.Array(productIds))
 
 	if err != nil {
 		return nil, err
@@ -453,12 +546,13 @@ func (svc *ProductService) getVariantOptionValuesMap(ctx context.Context, conn s
 
 	defer rows.Close()
 
-	optionValuesMap := map[string][]*model.ProductOptionValueRecord{}
+	optionValuesMap := make(map[string]map[string][]*model.ProductOptionValueRecord)
 
 	for rows.Next() {
 		var record model.ProductOptionValueRecord
+		var productId string
 
-		err := rows.Scan(&record.Id, &record.OptionId, &record.VariantId, &record.Title, &record.CreatedAt, &record.UpdatedAt, &record.DeletedAt)
+		err := rows.Scan(&record.Id, &record.OptionId, &record.VariantId, &record.Title, &record.CreatedAt, &record.UpdatedAt, &record.DeletedAt, &productId)
 
 		if err != nil {
 			return nil, err
@@ -466,11 +560,15 @@ func (svc *ProductService) getVariantOptionValuesMap(ctx context.Context, conn s
 
 		variantId := record.VariantId
 
-		if optionValuesMap[variantId] == nil {
-			optionValuesMap[variantId] = []*model.ProductOptionValueRecord{&record}
-		} else {
-			optionValuesMap[variantId] = append(optionValuesMap[variantId], &record)
+		if optionValuesMap[productId] == nil {
+			optionValuesMap[productId] = make(map[string][]*model.ProductOptionValueRecord)
 		}
+
+		if optionValuesMap[productId][variantId] == nil {
+			optionValuesMap[productId][variantId] = []*model.ProductOptionValueRecord{}
+		}
+
+		optionValuesMap[productId][variantId] = append(optionValuesMap[productId][variantId], &record)
 
 	}
 

@@ -7,6 +7,7 @@ import (
 	"ecom-backend/internal/validator"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -147,7 +148,39 @@ func (h *ProductHandler) UpdateVariantDetails(w http.ResponseWriter, r *http.Req
 }
 
 func (h *ProductHandler) GetProducts(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	h.WriteJson(w, 200, "Get products", nil)
+
+	page, err := strconv.ParseInt(r.URL.Query().Get("page"), 10, 64)
+
+	if err != nil {
+		h.BadRequestResponse(w, r, errors.New("invalid query parameter `page`"))
+		return
+	}
+
+	if page <= 0 {
+		h.BadRequestResponse(w, r, errors.New("page must be > 0"))
+		return
+	}
+
+	pageSize, err := strconv.ParseInt(r.URL.Query().Get("pageSize"), 10, 64)
+
+	if err != nil {
+		h.BadRequestResponse(w, r, errors.New("invalid query parameter `pageSize`"))
+		return
+	}
+
+	if pageSize <= 0 {
+		h.BadRequestResponse(w, r, errors.New("pageSize must be > 0"))
+		return
+	}
+
+	list, rowCount, err := h.productSvc.ListAggregateProducts(r.Context(), service.ProductListingOptions{Page: uint(page), PageSize: uint(pageSize)})
+
+	if err != nil {
+		h.ServerErrorResponse(w, r, err)
+		return
+	}
+
+	h.WriteJson(w, http.StatusOK, ResponseBody{Payload: list, Metadata: PaginationMetadata{Page: int(page), PageSize: int(pageSize), RowsTotal: rowCount}}, nil)
 }
 func (h *ProductHandler) GetProduct(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	productId := ps.ByName("productId")
@@ -157,7 +190,7 @@ func (h *ProductHandler) GetProduct(w http.ResponseWriter, r *http.Request, ps h
 		return
 	}
 
-	product, err := h.productSvc.FindById(r.Context(), productId)
+	product, err := h.productSvc.GetAggregateProductById(r.Context(), productId)
 
 	if err != nil {
 		if errors.Is(err, model.ErrRecordNotFound) {
